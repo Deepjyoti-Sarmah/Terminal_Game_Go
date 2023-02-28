@@ -11,7 +11,29 @@ const (
 	PLAYER  = 69
 )
 
+type level struct {
+	width, height int
+	data          [][]byte
+}
+
 type game struct {
+	isRunning bool
+}
+
+func newGame(width, height int) *game {
+	return &game{}
+}
+
+func (g *game) start() {
+	g.isRunning = true
+	g.loop()
+}
+
+func (g *game) loop() {
+	for g.isRunning {
+		g.update()
+		g.render()
+	}
 }
 
 func (g *game) update() {
@@ -55,7 +77,7 @@ func main() {
 				buf.WriteString(" ")
 			}
 			if level[h][w] == WALL {
-				buf.WriteString("H")
+				buf.WriteString("▢")
 			}
 		}
 		buf.WriteString("\n")
