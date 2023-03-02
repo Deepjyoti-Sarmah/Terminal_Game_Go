@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -15,6 +16,16 @@ const (
 	MAX_SAMPLES = 100
 )
 
+type input struct {
+	pressedKey byte
+}
+
+func (i *input) update() {
+	b := make([]byte, 1)
+	os.Stdin.Read(b)
+	i.pressedKey = b[0]
+}
+
 type position struct {
 	x, y int
 }
@@ -22,10 +33,26 @@ type position struct {
 type player struct {
 	pos   position
 	level *level
+	input *input
+
+	reverse bool
 }
 
 func (p *player) update() {
+	if p.reverse {
+		p.pos.x -= 1
+		if p.pos.x == 2 {
+			p.pos.x += 1
+			p.reverse = false
+		}
+		return
+	}
+
 	p.pos.x += 1
+	if p.pos.x == p.level.width-1 {
+		p.pos.x -= 1
+		p.reverse = true
+	}
 }
 
 type stats struct {
@@ -52,15 +79,15 @@ func (s *stats) update() {
 
 type level struct {
 	width, height int
-	data          [][]byte
+	data          [][]int
 }
 
 func newLevel(width, height int) *level {
-	data := make([][]byte, height)
+	data := make([][]int, height)
 
 	for h := 0; h < height; h++ {
 		for w := 0; w < width; w++ {
-			data[h] = make([]byte, width)
+			data[h] = make([]int, width)
 		}
 	}
 	for h := 0; h < height; h++ {
@@ -86,22 +113,33 @@ func newLevel(width, height int) *level {
 	}
 }
 
+func (l *level) set(pos position, v int) {
+	l.data[pos.y][pos.x] = v
+}
+
 type game struct {
 	isRunning bool
 	level     *level
 	stats     *stats
 	player    *player
-
-	drawBuf *bytes.Buffer
+	input     *input
+	drawBuf   *bytes.Buffer
 }
 
 func newGame(width, height int) *game {
-	lvl := newLevel(width, height)
+	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+	var (
+		lvl  = newLevel(width, height)
+		inpu = &input{}
+	)
 	return &game{
 		level:   lvl,
 		drawBuf: new(bytes.Buffer),
 		stats:   newStats(),
+		input:   inpu,
 		player: &player{
+			input: inpu,
 			level: lvl,
 			pos:   position{x: 2, y: 5},
 		},
@@ -115,6 +153,7 @@ func (g *game) start() {
 
 func (g *game) loop() {
 	for g.isRunning {
+		g.input.update()
 		g.update()
 		g.render()
 		g.stats.update()
@@ -123,12 +162,9 @@ func (g *game) loop() {
 }
 
 func (g *game) update() {
+	g.level.set(g.player.pos, NOTHING)
 	g.player.update()
-}
-
-func (g *game) renderPlayer() {
-	
-	g.level.data[g.player.pos.y][g.player.pos.x] = PLAYER
+	g.level.set(g.player.pos, PLAYER)
 }
 
 func (g *game) renderLevel() {
@@ -141,19 +177,17 @@ func (g *game) renderLevel() {
 				g.drawBuf.WriteString("▢")
 			}
 			if g.level.data[h][w] == PLAYER {
-				g.drawBuf.WriteString("P")
+				g.drawBuf.WriteString("☺")
 			}
 		}
 		g.drawBuf.WriteString("\n")
 	}
-
 }
 
 func (g *game) render() {
 	g.drawBuf.Reset()
 	fmt.Fprint(os.Stdout, "\033[23\033[1;1H")
 	g.renderLevel()
-	g.renderPlayer()
 	g.renderStats()
 	fmt.Fprint(os.Stdout, g.drawBuf.String())
 }
@@ -169,41 +203,4 @@ func main() {
 
 	g := newGame(width, height)
 	g.start()
-	// level := make([][]byte, height)
-
-	// for h := 0; h < height; h++ {
-	// 	for w := 0; w < width; w++ {
-	// 		level[h] = make([]byte, width)
-	// 	}
-	// }
-	// for h := 0; h < height; h++ {
-	// 	for w := 0; w < width; w++ {
-	// 		if h == 0 {
-	// 			level[h][w] = WALL
-	// 		}
-	// 		if w == 0 {
-	// 			level[h][w] = WALL
-	// 		}
-	// 		if w == width-1 {
-	// 			level[h][w] = WALL
-	// 		}
-	// 		if h == height-1 {
-	// 			level[h][w] = WALL
-	// 		}
-	// 	}
-	// }
-	// buf := new(bytes.Buffer)
-	// for h := 0; h < height; h++ {
-	// 	for w := 0; w < width; w++ {
-	// 		if level[h][w] == NOTHING {
-	// 			buf.WriteString(" ")
-	// 		}
-	// 		if level[h][w] == WALL {
-	// 			buf.WriteString("▢")
-	// 		}
-	// 	}
-	// 	buf.WriteString("\n")
-	// }
-
-	// fmt.Println(buf.String())
 }
