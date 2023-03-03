@@ -21,9 +21,24 @@ type input struct {
 }
 
 func (i *input) update() {
-	b := make([]byte, 1)
-	os.Stdin.Read(b)
-	i.pressedKey = b[0]
+
+	i.pressedKey = 0
+	ch := make(chan byte)
+	tick := time.NewTicker(time.Millisecond * 2)
+
+	go func() {
+		b := make([]byte, 1)
+		os.Stdin.Read(b) //blocking untill stdin has stuff in buffer
+		// i.pressedKey = b[0]
+		ch <- b[0]
+	}()
+
+	select {
+	case key := <- ch:
+		i.pressedKey = key
+	case <-tick.C:
+		return
+	}
 }
 
 type position struct {
@@ -195,6 +210,7 @@ func (g *game) render() {
 func (g *game) renderStats() {
 	g.drawBuf.WriteString("-- STATS\n")
 	g.drawBuf.WriteString(fmt.Sprintf("FPS: %.2f\n", g.stats.fps))
+	// g.drawBuf.WriteString(fmt.Sprintf("KEYPRESSED: %v\n",input.pressedKey ))
 }
 
 func main() {
